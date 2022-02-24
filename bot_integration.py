@@ -1,7 +1,12 @@
+from unittest import result
 import requests
 
 # github repository username and repository https://github.com/<username>/<repository>/blob/main/README.md
 github_username=''
+
+# wich app selected in notion properties will push to this repo
+app_to_repo = ''
+
 github_repository=''
 # branch from which the new is created
 github_base_branch=''
@@ -15,6 +20,7 @@ notion_database_id=''
 # notion workspace > Settings & members > integrations > internal integration_name '...' > Copy internal integration token
 notion_integration_token=''
 
+# the only one column who will trigger new branch
 notion_board_column=''
 
 def create_branch(branch_name):
@@ -51,24 +57,34 @@ def get_tickets_from_notion():
     "Authorization": f"Bearer {notion_integration_token}",
     "Notion-Version": "2021-05-13"
   })
-  result_dict = r.json()
-  result = result_dict['results']
-
-  tickets = []
   
-  tickets_in_columnm= []
-  for i in result:
-      if 'Status' in i['properties']:
-          if i['properties']['Status']['select']['name'] == notion_board_column:
-            tickets_in_columnm.append({'ticket': i['properties']})
+  if r.status_code != 200:
+    return {'status_code':r.status_code,'result':r}
+  else:      
+    result_dict = r.json()
+    result = result_dict['results']
 
-  titles=[]
+    tickets_in_columnm= []
 
-  for ticket in tickets_in_columnm:
-    ticket_name = ticket['ticket']['Name']['title'][0]['plain_text']
-    titles.append(ticket_name.strip().replace(" ", "-").lower())
-    
-  return titles
+    # select tickets in specified notion column
+    for ticket in result:
+        if 'Status' in ticket['properties']:
+            if ticket['properties']['Status']['select']['name'] == notion_board_column:
+                apps = ticket['properties']['App']['multi_select']
+                apps_names = []
+                for app in apps:
+                    apps_names.append(app['name'])
+                if app_to_repo in apps_names:
+                    tickets_in_columnm.append({'ticket': ticket['properties']})
+
+
+    titles=[]
+
+    for ticket in tickets_in_columnm:
+        ticket_name = ticket['ticket']['Name']['title'][0]['plain_text']
+        titles.append(ticket_name.strip().replace(" ", "-").lower())
+        
+    return {'status_code':r.status_code,'result':titles}
 
 def update_branches_with_tickets(tickets, branches):
     for ticket in tickets:
@@ -81,7 +97,10 @@ def update_branches_with_tickets(tickets, branches):
 
 
 notion_tickets = get_tickets_from_notion()
+if notion_tickets['status_code'] == 200:
+    github_branches = get_branches()
 
-github_branches = get_branches()
-
-update_branches_with_tickets(notion_tickets,github_branches)
+    update_branches_with_tickets(notion_tickets['result'],github_branches)
+else:
+    print('Notion error')
+    print(notion_tickets)
