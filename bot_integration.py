@@ -1,5 +1,7 @@
 from unittest import result
 import requests
+import time
+from datetime import date
 
 # github repository username and repository https://github.com/<username>/<repository>/blob/main/README.md
 github_username=''
@@ -22,6 +24,10 @@ notion_integration_token=''
 
 # the only one column who will trigger new branch
 notion_board_column=''
+
+logs_path="/var/log/bot_notion_back.log"
+
+today = date.today()
 
 def create_branch(branch_name):
     headers = {'Authorization': "Token " + github_token}
@@ -90,10 +96,16 @@ def update_branches_with_tickets(tickets, branches):
     for ticket in tickets:
         if ticket not in branches:
             create_branch(ticket)
-            print(f'Branch {ticket} created')
+            write_log(f'Branch {ticket} created')
+
         else:
-            print(f'Branch {ticket} already exists')
+            write_log(f'Branch {ticket} already exists')
         
+def write_log(content):
+    print('entro a la funcion')
+    with open(logs_path, "a") as f:
+        print(today.strftime("%d/%m/%Y") +" | "+ content + "\n")
+        f.write(today.strftime("%d/%m/%Y") +" | "+ content + "\n")
 
 
 notion_tickets = get_tickets_from_notion()
@@ -102,5 +114,4 @@ if notion_tickets['status_code'] == 200:
 
     update_branches_with_tickets(notion_tickets['result'],github_branches)
 else:
-    print('Notion error')
-    print(notion_tickets)
+    write_log('Notion error')
